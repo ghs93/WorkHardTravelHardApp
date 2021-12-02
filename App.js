@@ -10,22 +10,35 @@ import {
   Alert,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Fontisto } from "@expo/vector-icons";
+import { Fontisto, MaterialCommunityIcons } from "@expo/vector-icons";
 import { theme } from "./colors";
 
 const STORAGE_KEY = "@toDos";
+const WORKING_STORAGE_KEY = "@working";
 
 export default function App() {
   const [working, setWorking] = useState(true);
+  useEffect(() => {
+    loadWorkingState();
+  }, []);
   const [text, setText] = useState("");
   const [toDos, setToDos] = useState({});
   useEffect(() => {
     loadToDos();
   }, []);
+  const [modify, setModify] = useState("");
+  const [modifyText, setModifyText] = useState("");
 
-  const travel = () => setWorking(false);
-  const work = () => setWorking(true);
+  const travel = async () => {
+    setWorking(false);
+    await saveWorkingState(false);
+  };
+  const work = async () => {
+    setWorking(true);
+    await saveWorkingState(true);
+  };
   const onChangeText = (payload) => setText(payload);
+  const onModifyText = (payload) => setModifyText(payload);
   const saveToDos = async (toSave) => {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
   };
@@ -40,11 +53,27 @@ export default function App() {
       return;
     }
 
-    const newToDos = { ...toDos, [Date.now()]: { text, working } };
+    const newToDos = {
+      ...toDos,
+      [Date.now()]: { text, working, complete: false },
+    };
 
     setToDos(newToDos);
     await saveToDos(newToDos);
     setText("");
+  };
+  const modifyToDo = async (key) => {
+    if (modifyText === "") {
+      return;
+    }
+
+    const newToDos = { ...toDos };
+    newToDos[key].text = modifyText;
+
+    setToDos(newToDos);
+    await saveToDos(newToDos);
+    setModifyText("");
+    setModify("");
   };
   const deleteToDo = (key) => {
     Alert.alert("Delete To Do", "Are you sure?", [
@@ -61,10 +90,26 @@ export default function App() {
       },
     ]);
   };
+  const updateToDo = async (key, complete) => {
+    const newToDos = { ...toDos };
+    newToDos[key].complete = complete;
+    setToDos(newToDos);
+    await saveToDos(newToDos);
+  };
+  const saveWorkingState = async (workingState) => {
+    await AsyncStorage.setItem(
+      WORKING_STORAGE_KEY,
+      JSON.stringify(workingState)
+    );
+  };
+  const loadWorkingState = async () => {
+    const w = await AsyncStorage.getItem(WORKING_STORAGE_KEY);
+    setWorking(JSON.parse(w));
+  };
 
   return (
     <View style={styles.container}>
-      <StatusBar style="auto" />
+      <StatusBar style="light" />
       <View style={styles.header}>
         <TouchableOpacity onPress={work}>
           <Text
@@ -96,12 +141,83 @@ export default function App() {
       <ScrollView>
         {Object.keys(toDos).map((key) =>
           toDos[key].working === working ? (
-            <View key={key} style={styles.toDo}>
-              <Text style={styles.toDoText}>{toDos[key].text}</Text>
-              <TouchableOpacity onPress={() => deleteToDo(key)}>
-                <Fontisto name="trash" size={18} color={theme.grey} />
-              </TouchableOpacity>
-            </View>
+            key === modify ? (
+              <View key={key} style={styles.toDo}>
+                <TextInput
+                  style={{ ...styles.modifyInput, flex: 7 }}
+                  value={modifyText}
+                  autoCorrect={false}
+                  onSubmitEditing={() => modifyToDo(key)}
+                  onChangeText={onModifyText}
+                  returnKeyType="done"
+                />
+                <TouchableOpacity
+                  style={{ ...styles.opacity, flex: 1, marginStart: 35 }}
+                  onPress={() => modifyToDo(key)}
+                >
+                  <Fontisto name="save" size={18} color="white" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ ...styles.opacity, flex: 1 }}
+                  onPress={() => {
+                    setModifyText("");
+                    setModify("");
+                  }}
+                >
+                  <Fontisto name="close" size={18} color="white" />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View key={key} style={styles.toDo}>
+                <Text
+                  style={{
+                    ...styles.toDoText,
+                    textDecorationLine: toDos[key].complete
+                      ? "line-through"
+                      : "none",
+                  }}
+                >
+                  {toDos[key].text}
+                </Text>
+                <View style={{ flexDirection: "row" }}>
+                  <TouchableOpacity style={styles.opacity}>
+                    <MaterialCommunityIcons
+                      name="pencil-circle-outline"
+                      size={22}
+                      color="white"
+                      onPress={() => {
+                        setModify(key);
+                        setModifyText(toDos[key].text);
+                      }}
+                    />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.opacity}
+                    onPress={() => updateToDo(key, !toDos[key].complete)}
+                  >
+                    {toDos[key].complete ? (
+                      <Fontisto
+                        name="checkbox-active"
+                        size={18}
+                        color="white"
+                      />
+                    ) : (
+                      <Fontisto
+                        name="checkbox-passive"
+                        size={18}
+                        color="white"
+                      />
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => deleteToDo(key)}
+                    style={styles.opacity}
+                  >
+                    <Fontisto name="trash" size={18} color={theme.grey} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )
           ) : null
         )}
       </ScrollView>
@@ -145,5 +261,12 @@ const styles = StyleSheet.create({
     color: "white",
     fontSize: 16,
     fontWeight: "500",
+  },
+  opacity: {
+    marginHorizontal: 5,
+  },
+  modifyInput: {
+    backgroundColor: "white",
+    fontSize: 18,
   },
 });
