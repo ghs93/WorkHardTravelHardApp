@@ -104,7 +104,9 @@ export default function App() {
   };
   const loadWorkingState = async () => {
     const w = await AsyncStorage.getItem(WORKING_STORAGE_KEY);
-    setWorking(JSON.parse(w));
+    if (w) {
+      setWorking(JSON.parse(w));
+    }
   };
 
   return (
